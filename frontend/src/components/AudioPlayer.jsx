@@ -8,7 +8,7 @@ export default function AudioPlayer() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [isDragging, setIsDragging] = useState(false); // New: Track dragging state
+  const [isDragging, setIsDragging] = useState(false); // Track if user is dragging slider
 
   // --- PLAYBACK LOGIC ---
   useEffect(() => {
@@ -19,6 +19,7 @@ export default function AudioPlayer() {
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch((error) => {
+          // Ignore "AbortError" which happens when skipping tracks quickly
           if (error.name !== 'AbortError') {
             console.error("Playback failed:", error);
           }
@@ -30,6 +31,7 @@ export default function AudioPlayer() {
   }, [isPlaying, currentTrack]);
 
   // --- EVENT HANDLERS ---
+  
   const handleTimeUpdate = () => {
     // Only update time if user is NOT dragging the slider
     if (audioRef.current && !isDragging) {
@@ -65,6 +67,10 @@ export default function AudioPlayer() {
     const vol = e.target.value;
     setVolume(vol);
     if (audioRef.current) audioRef.current.volume = vol;
+  };
+
+  const handleError = (e) => {
+    console.error("Audio Player Error:", e);
   };
 
   const formatTime = (time) => {
@@ -133,11 +139,11 @@ export default function AudioPlayer() {
                 min="0" 
                 max={duration || 0} 
                 value={currentTime} 
-                onMouseDown={handleSeekStart} // Start Dragging
-                onTouchStart={handleSeekStart}
-                onChange={handleSeekMove}     // Dragging...
-                onMouseUp={handleSeekEnd}     // Stop Dragging (Commit)
-                onTouchEnd={handleSeekEnd}
+                onMouseDown={handleSeekStart} // Desktop Drag Start
+                onTouchStart={handleSeekStart} // Mobile Touch Start
+                onChange={handleSeekMove}     // Dragging
+                onMouseUp={handleSeekEnd}     // Desktop Drop
+                onTouchEnd={handleSeekEnd}    // Mobile Drop
                 className="absolute w-full h-full opacity-0 z-20 cursor-pointer"
               />
               <div 
@@ -169,13 +175,14 @@ export default function AudioPlayer() {
 
       <audio 
         ref={audioRef} 
-        key={currentTrack.id}      // <--- THIS IS THE MAGIC FIX (Recreates player for every song)
+        key={currentTrack.id}      // <--- MAGIC FIX: Forces player reset on song change
         src={currentTrack.audio_url} 
+        preload="auto"             // <--- Forces browser to load audio immediately
+        autoPlay={isPlaying}       // <--- Helps browser autoplay policy
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={playNext} 
-        onError={(e) => console.error("Audio Error:", e)}
-        autoPlay={isPlaying} 
+        onError={handleError}
       />
     </div>
   );
