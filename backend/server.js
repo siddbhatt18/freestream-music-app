@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 5000;
 // We allow both your local development environment AND your production frontend.
 const allowedOrigins = [
     "http://localhost:5173",                    // Local Frontend
-    "https://your-frontend-app-name.vercel.app" // Production Frontend (Update this after Vercel deploy!)
+    "https://freestream-music-app.vercel.app/" // Production Frontend (Update this after Vercel deploy!)
 ];
 
 app.use(cors({
@@ -218,3 +218,4 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
