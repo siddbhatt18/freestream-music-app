@@ -8,22 +8,17 @@ export default function AudioPlayer() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [isReady, setIsReady] = useState(false); // Track if song is loaded
+  const [isDragging, setIsDragging] = useState(false); // New: Track dragging state
 
   // --- PLAYBACK LOGIC ---
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
 
-    // Reset readiness when track changes
-    setIsReady(false);
-
     if (isPlaying) {
-      // Try to play. If it fails (e.g., song not loaded yet), the 'onCanPlay' event will handle it.
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch((error) => {
-          // Ignore "AbortError" (happens when skipping fast)
           if (error.name !== 'AbortError') {
             console.error("Playback failed:", error);
           }
@@ -36,27 +31,34 @@ export default function AudioPlayer() {
 
   // --- EVENT HANDLERS ---
   const handleTimeUpdate = () => {
-    if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+    // Only update time if user is NOT dragging the slider
+    if (audioRef.current && !isDragging) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
   };
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
-      setIsReady(true); // Song is ready!
     }
   };
 
-  // If song fails to load (e.g., 403 Forbidden), this runs
-  const handleError = (e) => {
-    console.error("Audio Error Code:", e.target.error ? e.target.error.code : "Unknown");
-    console.error("Audio Error Details:", e.target.error);
-    alert("Error playing song. Check Console for details (likely Supabase Permissions).");
+  // 1. User STARTS dragging: Stop updating UI from audio
+  const handleSeekStart = () => {
+    setIsDragging(true);
   };
 
-  const handleSeek = (e) => {
-    const time = e.target.value;
-    setCurrentTime(time);
-    if (audioRef.current) audioRef.current.currentTime = time;
+  // 2. User DRAGS: Just update the visual number
+  const handleSeekMove = (e) => {
+    setCurrentTime(e.target.value);
+  };
+
+  // 3. User DROPS: Finally tell audio to jump
+  const handleSeekEnd = (e) => {
+    setIsDragging(false);
+    if (audioRef.current) {
+      audioRef.current.currentTime = e.target.value;
+    }
   };
 
   const handleVolumeChange = (e) => {
@@ -122,6 +124,7 @@ export default function AudioPlayer() {
              </button>
           </div>
 
+          {/* Progress Bar */}
           <div className="flex items-center gap-3 w-full max-w-xl group">
             <span className="text-xs text-gray-400 w-10 text-right font-mono">{formatTime(currentTime)}</span>
             <div className="relative w-full h-1 bg-gray-700 rounded-full cursor-pointer overflow-hidden">
@@ -130,7 +133,11 @@ export default function AudioPlayer() {
                 min="0" 
                 max={duration || 0} 
                 value={currentTime} 
-                onChange={handleSeek}
+                onMouseDown={handleSeekStart} // Start Dragging
+                onTouchStart={handleSeekStart}
+                onChange={handleSeekMove}     // Dragging...
+                onMouseUp={handleSeekEnd}     // Stop Dragging (Commit)
+                onTouchEnd={handleSeekEnd}
                 className="absolute w-full h-full opacity-0 z-20 cursor-pointer"
               />
               <div 
@@ -162,13 +169,13 @@ export default function AudioPlayer() {
 
       <audio 
         ref={audioRef} 
+        key={currentTrack.id}      // <--- THIS IS THE MAGIC FIX (Recreates player for every song)
         src={currentTrack.audio_url} 
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={playNext} 
-        onError={handleError}     // <--- Added Error Handling
-        preload="auto"            // <--- Forces browser to load it
-        autoPlay={isPlaying}      // <--- Helps browser understand intent
+        onError={(e) => console.error("Audio Error:", e)}
+        autoPlay={isPlaying} 
       />
     </div>
   );
