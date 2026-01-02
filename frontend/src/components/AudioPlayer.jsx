@@ -8,23 +8,49 @@ export default function AudioPlayer() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [isReady, setIsReady] = useState(false); // Track if song is loaded
 
+  // --- PLAYBACK LOGIC ---
   useEffect(() => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.play().catch(e => console.log("Playback error:", e));
-      } else {
-        audioRef.current.pause();
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) return;
+
+    // Reset readiness when track changes
+    setIsReady(false);
+
+    if (isPlaying) {
+      // Try to play. If it fails (e.g., song not loaded yet), the 'onCanPlay' event will handle it.
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          // Ignore "AbortError" (happens when skipping fast)
+          if (error.name !== 'AbortError') {
+            console.error("Playback failed:", error);
+          }
+        });
       }
+    } else {
+      audio.pause();
     }
   }, [isPlaying, currentTrack]);
 
+  // --- EVENT HANDLERS ---
   const handleTimeUpdate = () => {
     if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
   };
 
   const handleLoadedMetadata = () => {
-    if (audioRef.current) setDuration(audioRef.current.duration);
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+      setIsReady(true); // Song is ready!
+    }
+  };
+
+  // If song fails to load (e.g., 403 Forbidden), this runs
+  const handleError = (e) => {
+    console.error("Audio Error Code:", e.target.error ? e.target.error.code : "Unknown");
+    console.error("Audio Error Details:", e.target.error);
+    alert("Error playing song. Check Console for details (likely Supabase Permissions).");
   };
 
   const handleSeek = (e) => {
@@ -40,7 +66,7 @@ export default function AudioPlayer() {
   };
 
   const formatTime = (time) => {
-    if (!time) return "0:00";
+    if (!time || isNaN(time)) return "0:00";
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
@@ -72,14 +98,11 @@ export default function AudioPlayer() {
         {/* CENTER: Player Controls */}
         <div className="flex flex-col items-center w-2/4">
           
-          {/* Controls Row: Prev | Play | Next */}
           <div className="flex items-center gap-6 mb-2">
-             {/* PREVIOUS BUTTON */}
              <button onClick={playPrevious} className="text-gray-400 hover:text-white transition">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 fill-current" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
              </button>
 
-             {/* PLAY/PAUSE BUTTON */}
              <button 
                onClick={() => setIsPlaying(!isPlaying)}
                className="relative group focus:outline-none"
@@ -94,13 +117,11 @@ export default function AudioPlayer() {
                </div>
              </button>
 
-             {/* NEXT BUTTON */}
              <button onClick={playNext} className="text-gray-400 hover:text-white transition">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 fill-current" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
              </button>
           </div>
 
-          {/* Progress Bar */}
           <div className="flex items-center gap-3 w-full max-w-xl group">
             <span className="text-xs text-gray-400 w-10 text-right font-mono">{formatTime(currentTime)}</span>
             <div className="relative w-full h-1 bg-gray-700 rounded-full cursor-pointer overflow-hidden">
@@ -145,6 +166,9 @@ export default function AudioPlayer() {
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={playNext} 
+        onError={handleError}     // <--- Added Error Handling
+        preload="auto"            // <--- Forces browser to load it
+        autoPlay={isPlaying}      // <--- Helps browser understand intent
       />
     </div>
   );
